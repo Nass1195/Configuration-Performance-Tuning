@@ -53,8 +53,8 @@ def main():
     """
     Main function to generate visualizations for all datasets in the results folder.
     """
-    results_folder = "search_results_baseline"
-    visualization_folder = "visualization_results_baseline"
+    results_folder = "search_results"
+    visualization_folder = "visualization_results"
 
     if not os.path.exists(results_folder):
         print(f"Error: The folder {results_folder} does not exist.")

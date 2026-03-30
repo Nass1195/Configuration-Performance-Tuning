@@ -75,7 +75,7 @@ def random_search(file_path, budget, output_file):
 # Main function to test on multiple datasets
 def main():
     datasets_folder = "datasets"
-    output_folder = "search_results"
+    output_folder = "search_results_baseline"
     os.makedirs(output_folder, exist_ok=True)
     budget = 100
 
