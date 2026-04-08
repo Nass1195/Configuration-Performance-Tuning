@@ -2,7 +2,9 @@ import pandas as pd
 import numpy as np
 import random
 import os
-
+import matplotlib.pyplot as plt
+from scipy import stats
+from baseline.main import random_search
 
 def evolutionary_algo(file_path, budget, output_file):
     data = pd.read_csv(file_path)
@@ -168,6 +170,59 @@ def main():
         print(f"  Best Performance: {result['Best Performance']}")
         print(f"  Best Solution (EA):    [{', '.join(map(str, result['Best Solution (EA)']))}]")
         print(f"  Best Performance (EA): {result['Best Performance (EA)']}")
+        
+    compare_algorithms(file_path, budget=100, runs=30)
+
+def compare_algorithms(file_path, budget=100, runs=30):
+    print(f"Running experiments on {file_path} with budget {budget} over {runs} runs...")
+    
+    rs_results = []
+    sa_results = []
+    ga_results = []
+
+    for i in range(runs):
+        
+        _, rs_perf = random_search(file_path, budget, f"rs_temp.csv")
+        _, sa_perf = SA(file_path, budget, f"sa_temp.csv") # Assuming your SA is named SA
+        _, ga_perf = evolutionary_algo(file_path, budget, f"ga_temp.csv")
+
+        rs_results.append(rs_perf)
+        sa_results.append(sa_perf)
+        ga_results.append(ga_perf)
+        
+        if (i + 1) % 5 == 0:
+            print(f"Completed {i + 1}/{runs} runs...")
+
+   
+    print("\n--- RESULTS SUMMARY (Lower is Better) ---")
+    print(f"Random Search (Baseline): Mean = {np.mean(rs_results):.2f}, Median = {np.median(rs_results):.2f}")
+    print(f"Simulated Annealing:      Mean = {np.mean(sa_results):.2f}, Median = {np.median(sa_results):.2f}")
+    print(f"Genetic Algorithm:        Mean = {np.mean(ga_results):.2f}, Median = {np.median(ga_results):.2f}")
+
+   
+    print("\n--- STATISTICAL TESTS (p-value < 0.05 means significantly better) ---")
+    
+    
+    stat, p_sa = stats.mannwhitneyu(sa_results, rs_results, alternative='less')
+    print(f"SA vs Random Search p-value: {p_sa:.4e} -> {'SA is significantly better' if p_sa < 0.05 else 'No significant difference'}")
+
+   
+    stat, p_ga = stats.mannwhitneyu(ga_results, rs_results, alternative='less')
+    print(f"GA vs Random Search p-value: {p_ga:.4e} -> {'GA is significantly better' if p_ga < 0.05 else 'No significant difference'}")
+
+    
+    stat, p_sa_ga = stats.mannwhitneyu(sa_results, ga_results, alternative='less')
+    print(f"SA vs GA p-value: {p_sa_ga:.4e} -> {'SA is significantly better than GA' if p_sa_ga < 0.05 else 'GA is better or no difference'}")
+
+  
+    plt.figure(figsize=(8, 6))
+    plt.boxplot([rs_results, sa_results, ga_results], labels=['Random Search', 'Simulated Annealing', 'Genetic Algorithm'])
+    plt.title(f'Performance Comparison ({runs} Runs, Budget={budget})')
+    plt.ylabel('Best Performance Found (Lower is Better)')
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.savefig('algorithm_comparison.png')
+    print("\nSaved boxplot to 'algorithm_comparison.png'")
+
 
 if __name__ == "__main__":
     main()
