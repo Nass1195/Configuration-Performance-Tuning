@@ -5,6 +5,7 @@ import os
 import matplotlib.pyplot as plt
 from scipy import stats
 from baseline.main import random_search
+import seaborn as sns
 
 def evolutionary_algo(file_path, budget, output_file):
     data = pd.read_csv(file_path)
@@ -45,10 +46,10 @@ def evolutionary_algo(file_path, budget, output_file):
 
         child = [p1[i] if random.random() < 0.5 else p2[i] for i in range(len(config_columns))]
 
-        if random.random() < 0.2:
-            mut_idx = random.randint(0, len(config_columns) - 1)
-            col_name = config_columns[mut_idx]
-            child[mut_idx] = int(random.choice(unique_values[col_name]))
+        
+        mut_idx = random.randint(0, len(config_columns) - 1)
+        col_name = config_columns[mut_idx]
+        child[mut_idx] = int(random.choice(unique_values[col_name]))
 
         child_tuple = tuple(child)
         perf = data_dict.get(child_tuple)
@@ -73,50 +74,45 @@ def SA(file_path, budget, output_file):
 
     data = pd.read_csv(file_path)
 
-    config_columns = data.columns[:-1]
+    config_columns = list(data.columns[:-1])
     performance_column = data.columns[-1]
-
-    best_performance = np.inf
-    best_solution = []
+    
+    data_dict = data.set_index(config_columns)[performance_column].to_dict()
+    unique_values = {col: data[col].unique() for col in config_columns}
 
     search_results = []
     
-    temp = 100
-
-    colling_rate = 0.99
-
-    iteration = 0
-
     while True:
-        sampled_config = [int(np.random.choice(data[col].unique())) for col in config_columns]
-        matched_row = data.loc[(data[config_columns] == pd.Series(sampled_config, index=config_columns)).all(axis=1)]
-
-        if not matched_row.empty:
-            best_performance = matched_row[performance_column].iloc[0]
-            best_solution = sampled_config
+        sampled_config = tuple(int(np.random.choice(unique_values[col])) for col in config_columns)
+        if sampled_config in data_dict:
+            best_performance = data_dict[sampled_config]
+            best_solution = list(sampled_config)
             break
     
     current_solution = best_solution
     current_performance = best_performance
 
+    temp = max(1.0, current_performance * 0.2)
+    colling_rate = 0.98
+    iteration = 1
+
+    num_of_changes = max(min(3, len(config_columns) // 2), 1)
     while iteration < budget:
+
         new_solution = list(current_solution)
-        num_changes = min(len(config_columns), 1)
-        selected_indices = random.sample(range(len(config_columns)), num_changes)
-        for idx in selected_indices:
+
+        changes = random.sample(range(len(config_columns)), num_of_changes)
+        for idx in changes:
             column_to_change = config_columns[idx]
-            changed_value = int(np.random.choice(data[column_to_change].unique()))
-            new_solution[idx] = changed_value
+            possible_values = [v for v in unique_values[column_to_change] if v != current_solution[idx]]
+            new_solution[idx] = int(random.choice(possible_values))
 
-        
+        new_solution_tuple = tuple(new_solution)
+       
+        performance = data_dict.get(new_solution_tuple)
 
-        matched_row = data.loc[(data[config_columns] == pd.Series(new_solution, index=config_columns)).all(axis=1)]
-
-        if not matched_row.empty:
-            performance = matched_row[performance_column].iloc[0]
-
+        if performance is not None:
             performance_delta = performance - current_performance
-
             
             if performance_delta < 0 or np.random.rand() < np.exp(-performance_delta / temp):
                 current_solution = new_solution
@@ -140,41 +136,30 @@ def SA(file_path, budget, output_file):
 def main():
     datasets_folder = "datasets"
     output_folder = "search_results"
-    output_folder1 = "search_results1"
 
     os.makedirs(output_folder, exist_ok=True)
-    os.makedirs(output_folder1, exist_ok=True)
-
-
-    budget = 100
-
     results = {}
+    summaries = []
+
+
     for file_name in os.listdir(datasets_folder):
-        if file_name.endswith(".csv"):
-            file_path = os.path.join(datasets_folder, file_name)
-            output_file = os.path.join(output_folder, f"{file_name.split('.')[0]}_search_results.csv")
-            output_file1 = os.path.join(output_folder1, f"{file_name.split('.')[0]}_search_results.csv")
-            best_solution1, best_performance1 = evolutionary_algo(file_path, budget, output_file1)
-            best_solution, best_performance = SA(file_path, budget, output_file)
-            results[file_name] = {
-                "Best Solution": best_solution,
-                "Best Performance": best_performance,
-                "Best Solution (EA)": best_solution1,
-                "Best Performance (EA)": best_performance1
-            }
-            
-
-    for system, result in results.items():
-        print(f"System: {system}")
-        print(f"  Best Solution:    [{', '.join(map(str, result['Best Solution']))}]")
-        print(f"  Best Performance: {result['Best Performance']}")
-        print(f"  Best Solution (EA):    [{', '.join(map(str, result['Best Solution (EA)']))}]")
-        print(f"  Best Performance (EA): {result['Best Performance (EA)']}")
         
-    compare_algorithms(file_path, budget=100, runs=30)
+        if file_name.endswith(".csv"):
+            dataset_name = file_name.split('.')[0]
+            print(f"\n======================================")
+            print(f"Testing Dataset: {dataset_name}")
+            print(f"======================================")
+            file_path = os.path.join(datasets_folder, file_name)
+            output_file = os.path.join(output_folder, f"{file_name.split('.')[0]}_search_results.png")
+            algo_results, summary = compare_algorithms(file_path, output_file, budget=1000, runs=30)
+            results[dataset_name] = algo_results
+            summaries.append(summary)
 
-def compare_algorithms(file_path, budget=100, runs=30):
-    print(f"Running experiments on {file_path} with budget {budget} over {runs} runs...")
+        
+   
+
+
+def compare_algorithms(file_path, output_file, budget=100, runs=30):
     
     rs_results = []
     sa_results = []
@@ -183,7 +168,7 @@ def compare_algorithms(file_path, budget=100, runs=30):
     for i in range(runs):
         
         _, rs_perf = random_search(file_path, budget, f"rs_temp.csv")
-        _, sa_perf = SA(file_path, budget, f"sa_temp.csv") # Assuming your SA is named SA
+        _, sa_perf = SA(file_path, budget, f"sa_temp.csv")
         _, ga_perf = evolutionary_algo(file_path, budget, f"ga_temp.csv")
 
         rs_results.append(rs_perf)
@@ -192,7 +177,10 @@ def compare_algorithms(file_path, budget=100, runs=30):
         
         if (i + 1) % 5 == 0:
             print(f"Completed {i + 1}/{runs} runs...")
-
+    
+    results = {
+        'RS': rs_results, 'SA': sa_results, 'GA': ga_results
+    }
    
     print("\n--- RESULTS SUMMARY (Lower is Better) ---")
     print(f"Random Search (Baseline): Mean = {np.mean(rs_results):.2f}, Median = {np.median(rs_results):.2f}")
@@ -220,8 +208,22 @@ def compare_algorithms(file_path, budget=100, runs=30):
     plt.title(f'Performance Comparison ({runs} Runs, Budget={budget})')
     plt.ylabel('Best Performance Found (Lower is Better)')
     plt.grid(axis='y', linestyle='--', alpha=0.7)
-    plt.savefig('algorithm_comparison.png')
+    plt.savefig(output_file)
     print("\nSaved boxplot to 'algorithm_comparison.png'")
+    summary = {
+        'Dataset': file_path.split('/')[-1].split('.')[0],
+        'RS_Mean': np.mean(rs_results),
+        'SA_Mean': np.mean(sa_results),
+        'GA_Mean': np.mean(ga_results),
+        'SA_Beats_RS (p < 0.05)': p_sa < 0.05,
+        'GA_Beats_RS (p < 0.05)': p_ga < 0.05,
+        'SA vs RS p-value': p_sa,
+        'GA vs RS p-value': p_ga,
+        'SA vs GA p-value': p_sa_ga
+    }
+
+    return results, summary
+
 
 
 if __name__ == "__main__":
