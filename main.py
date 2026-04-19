@@ -136,8 +136,14 @@ def SA(file_path, budget, output_file):
 def main():
     datasets_folder = "datasets"
     output_folder = "search_results"
+    SA_results_folder = "sa_results"
+    GA_results_folder = "ga_results"
+    RS_results_folder = "rs_results"
 
     os.makedirs(output_folder, exist_ok=True)
+    os.makedirs(SA_results_folder, exist_ok=True)
+    os.makedirs(GA_results_folder, exist_ok=True)
+    os.makedirs(RS_results_folder, exist_ok=True)
     results = {}
     summaries = []
 
@@ -149,27 +155,37 @@ def main():
             print(f"\n======================================")
             print(f"Testing Dataset: {dataset_name}")
             print(f"======================================")
+            sa_results_file = SA_results_folder + f"/{dataset_name}"
+            ga_results_file = GA_results_folder + f"/{dataset_name}"
+            rs_results_file = RS_results_folder + f"/{dataset_name}"
+            os.makedirs(sa_results_file, exist_ok=True)
+            os.makedirs(ga_results_file, exist_ok=True)
+            os.makedirs(rs_results_file, exist_ok=True)
             file_path = os.path.join(datasets_folder, file_name)
             output_file = os.path.join(output_folder, f"{file_name.split('.')[0]}_search_results.png")
-            algo_results, summary = compare_algorithms(file_path, output_file, budget=1000, runs=30)
+            algo_results, summary = compare_algorithms(file_path, output_file, sa_results_file, ga_results_file, rs_results_file, budget=100, runs=30)
             results[dataset_name] = algo_results
             summaries.append(summary)
 
         
-   
+    generate_global_report(summaries, output_folder)
 
 
-def compare_algorithms(file_path, output_file, budget=100, runs=30):
+def compare_algorithms(file_path, output_file, sa_results_path, ga_results_path, rs_results_path, budget=100, runs=30):
     
     rs_results = []
     sa_results = []
     ga_results = []
 
     for i in range(runs):
-        
-        _, rs_perf = random_search(file_path, budget, f"rs_temp.csv")
-        _, sa_perf = SA(file_path, budget, f"sa_temp.csv")
-        _, ga_perf = evolutionary_algo(file_path, budget, f"ga_temp.csv")
+
+        rs_results_file = rs_results_path + f"/run_{i+1}.csv"
+        sa_results_file = sa_results_path + f"/run_{i+1}.csv"
+        ga_results_file = ga_results_path + f"/run_{i+1}.csv"
+
+        _, rs_perf = random_search(file_path, budget, rs_results_file)
+        _, sa_perf = SA(file_path, budget, sa_results_file)
+        _, ga_perf = evolutionary_algo(file_path, budget, ga_results_file)
 
         rs_results.append(rs_perf)
         sa_results.append(sa_perf)
@@ -204,10 +220,14 @@ def compare_algorithms(file_path, output_file, budget=100, runs=30):
 
   
     plt.figure(figsize=(8, 6))
-    plt.boxplot([rs_results, sa_results, ga_results], labels=['Random Search', 'Simulated Annealing', 'Genetic Algorithm'])
+    results_data = [rs_results, sa_results, ga_results]
+    labels = ["Random Search", "Simulated Annealing", "Genetic Algorithm"]
+    for line, label in zip(results_data, labels):
+        plt.plot(line, marker='o', linestyle='-', alpha=0.5, label=label)
     plt.title(f'Performance Comparison ({runs} Runs, Budget={budget})')
     plt.ylabel('Best Performance Found (Lower is Better)')
-    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.xlabel('Run Number')
+    plt.legend()
     plt.savefig(output_file)
     print("\nSaved boxplot to 'algorithm_comparison.png'")
     summary = {
@@ -224,7 +244,63 @@ def compare_algorithms(file_path, output_file, budget=100, runs=30):
 
     return results, summary
 
+def generate_global_report(summaries, output_folder):
+    """
+    Takes the list of summary dictionaries and creates global visualizations.
+    """
+    if not summaries:
+        print("No summaries to visualize.")
+        return
 
+    df = pd.DataFrame(summaries)
+    df.set_index('Dataset', inplace=True)
+    
+    csv_path = os.path.join(output_folder, "global_summary_report.csv")
+    df.to_csv(csv_path)
+    print(f"\nSaved global statistical summary to '{csv_path}'")
+
+
+    plt.figure(figsize=(10, len(df) * 0.5 + 3)) 
+    
+    mean_cols = ['RS_Mean', 'SA_Mean', 'GA_Mean']
+    means_df = df[mean_cols]
+    
+    normalized_df = (means_df.T - means_df.min(axis=1)) / (means_df.max(axis=1) - means_df.min(axis=1) + 1e-9)
+    normalized_df = normalized_df.T 
+
+    print(normalized_df)
+    sns.heatmap(normalized_df, fmt=".2f", cmap="YlGnBu_r", cbar_kws={'label': 'Normalized Performance (Lighter is Better)'})
+    plt.title("Algorithm Mean Performance Across Datasets\n(Actual means shown in cells)")
+    plt.ylabel("Dataset")
+    plt.xlabel("Algorithm")
+    plt.tight_layout()
+    heatmap_path = os.path.join(output_folder, "global_performance_heatmap.png")
+    plt.savefig(heatmap_path)
+    
+
+    plt.figure(figsize=(8, 5))
+    wins = means_df.idxmin(axis=1)
+    
+    win_labels = wins.map({'RS_Mean': 'Random Search', 'SA_Mean': 'Simulated Annealing', 'GA_Mean': 'Genetic Algorithm'})
+    win_counts = win_labels.value_counts()
+    
+    for algo in ['Random Search', 'Simulated Annealing', 'Genetic Algorithm']:
+        if algo not in win_counts:
+            win_counts[algo] = 0
+
+    ax = win_counts.plot(kind='bar', color=['#95a5a6', '#e74c3c', '#2ecc71'], edgecolor='black')
+    plt.title("Algorithm 'Wins' (Lowest Mean per Dataset)")
+    plt.ylabel("Number of Datasets Won")
+    plt.xticks(rotation=0)
+    
+   
+    for p in ax.patches:
+        ax.annotate(str(p.get_height()), (p.get_x() * 1.005, p.get_height() * 1.005))
+        
+    plt.tight_layout()
+    bar_path = os.path.join(output_folder, "global_win_distribution.png")
+    plt.savefig(bar_path)
+    print(f"Saved global visualizations to '{output_folder}' directory.")
 
 if __name__ == "__main__":
     main()
