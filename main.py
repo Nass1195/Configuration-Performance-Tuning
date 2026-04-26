@@ -74,7 +74,7 @@ def random_search(file_path, budget, output_file):
 
     return [int(x) for x in best_solution], best_performance
 
-def evolutionary_algo(file_path, budget, output_file):
+def genetic_algorithm(file_path, budget, output_file):
     data = pd.read_csv(file_path)
 
     config_columns = list(data.columns[:-1])
@@ -252,7 +252,7 @@ def compare_algorithms(file_path, output_file, sa_results_path, ga_results_path,
 
         _, rs_perf = random_search(file_path, budget, rs_results_file)
         _, sa_perf = SA(file_path, budget, sa_results_file)
-        _, ga_perf = evolutionary_algo(file_path, budget, ga_results_file)
+        _, ga_perf = genetic_algorithm(file_path, budget, ga_results_file)
 
         rs_results.append(rs_perf)
         sa_results.append(sa_perf)
@@ -296,12 +296,11 @@ def compare_algorithms(file_path, output_file, sa_results_path, ga_results_path,
     plt.xlabel('Run Number')
     plt.legend()
     plt.savefig(output_file)
-    print("\nSaved boxplot to 'algorithm_comparison.png'")
     summary = {
         'Dataset': file_path.split('/')[-1].split('.')[0],
-        'RS_Mean': np.mean(rs_results),
-        'SA_Mean': np.mean(sa_results),
-        'GA_Mean': np.mean(ga_results),
+        'RS_Median': np.median(rs_results),
+        'SA_Median': np.median(sa_results),
+        'GA_Median': np.median(ga_results),
         'SA_Beats_RS (p < 0.05)': p_sa < 0.05,
         'GA_Beats_RS (p < 0.05)': p_ga < 0.05,
         'SA vs RS p-value': p_sa,
@@ -329,15 +328,15 @@ def generate_global_report(summaries, output_folder):
 
     plt.figure(figsize=(10, len(df) * 0.5 + 3)) 
     
-    mean_cols = ['RS_Mean', 'SA_Mean', 'GA_Mean']
-    means_df = df[mean_cols]
+    median_cols = ['RS_Median', 'SA_Median', 'GA_Median']
+    medians_df = df[median_cols]
     
-    normalized_df = (means_df.T - means_df.min(axis=1)) / (means_df.max(axis=1) - means_df.min(axis=1) + 1e-9)
+    normalized_df = (medians_df.T - medians_df.min(axis=1)) / (medians_df.max(axis=1) - medians_df.min(axis=1) + 1e-9)
     normalized_df = normalized_df.T 
 
     print(normalized_df)
     sns.heatmap(normalized_df, fmt=".2f", cmap="YlGnBu_r", cbar_kws={'label': 'Normalized Performance (Lighter is Better)'})
-    plt.title("Algorithm Mean Performance Across Datasets\n(Actual means shown in cells)")
+    plt.title("Algorithm Median Performance Across Datasets")
     plt.ylabel("Dataset")
     plt.xlabel("Algorithm")
     plt.tight_layout()
@@ -346,9 +345,9 @@ def generate_global_report(summaries, output_folder):
     
 
     plt.figure(figsize=(8, 5))
-    wins = means_df.idxmin(axis=1)
+    wins = medians_df.idxmin(axis=1)
     
-    win_labels = wins.map({'RS_Mean': 'Random Search', 'SA_Mean': 'Simulated Annealing', 'GA_Mean': 'Genetic Algorithm'})
+    win_labels = wins.map({'RS_Median': 'Random Search', 'SA_Median': 'Simulated Annealing', 'GA_Median': 'Genetic Algorithm'})
     win_counts = win_labels.value_counts()
     
     for algo in ['Random Search', 'Simulated Annealing', 'Genetic Algorithm']:
@@ -356,7 +355,7 @@ def generate_global_report(summaries, output_folder):
             win_counts[algo] = 0
 
     ax = win_counts.plot(kind='bar', color=['#95a5a6', '#e74c3c', '#2ecc71'], edgecolor='black')
-    plt.title("Algorithm 'Wins' (Lowest Mean per Dataset)")
+    plt.title("Algorithm 'Wins' (Lowest Median per Dataset)")
     plt.ylabel("Number of Datasets Won")
     plt.xticks(rotation=0)
     
@@ -368,6 +367,29 @@ def generate_global_report(summaries, output_folder):
     bar_path = os.path.join(output_folder, "global_win_distribution.png")
     plt.savefig(bar_path)
     print(f"Saved global visualizations to '{output_folder}' directory.")
+
+
+    p_val_cols = ['SA vs RS p-value', 'GA vs RS p-value', 'SA vs GA p-value']
+    p_val_df = df[p_val_cols]
+
+    plt.figure(figsize=(8, len(df) * 0.6 + 2))
+
+    sns.heatmap(p_val_df, 
+                cmap="RdYlGn_r",    
+                vmin=0.0, 
+                vmax=0.1,           
+                linewidths=0.5,
+                cbar_kws={'label': 'p-value (Green indicates p < 0.05)'})
+    
+    plt.title('Algorithm Comparison P-Values per Dataset')
+    plt.ylabel('Datasets')
+    plt.xlabel('Statistical Tests (Alternative = Less)')
+    
+    # Adjust layout and save
+    plt.tight_layout()
+    heatmap_path = f"{output_folder}/p_values_heatmap.png"
+    plt.savefig(heatmap_path)
+    plt.close()
 
 if __name__ == "__main__":
     main()
