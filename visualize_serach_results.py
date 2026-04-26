@@ -3,7 +3,7 @@ import pandas as pd
 import os
 
 
-def visualize_search_results(results_folder, dataset_name, visualization_folder):
+def visualize_search_results(results_folder, dataset_name):
     """
     Visualize the search results from stored CSV results.
 
@@ -12,58 +12,52 @@ def visualize_search_results(results_folder, dataset_name, visualization_folder)
         dataset_name (str): Name of the dataset to visualize (without extension).
         visualization_folder (str): Folder to save the visualization images.
     """
-    # Construct the file paths
-    csv_file = os.path.join(results_folder, f"{dataset_name}_search_results.csv")
-    output_image = os.path.join(visualization_folder, f"{dataset_name}_visualization.png")
 
-    # Check if the CSV file exists
-    if not os.path.exists(csv_file):
-        print(f"Error: The results file {csv_file} does not exist.")
-        return
-
-    # Load the search results
-    search_df = pd.read_csv(csv_file)
-
-    # Find the best performance value and its index
-    best_performance = search_df["Performance"].min() if "---" not in dataset_name.lower() else search_df["Performance"].max()
-    best_index = search_df[search_df["Performance"] == best_performance].index[0]
-
-    # Create the plot
     plt.figure(figsize=(10, 6))
 
-    # Plot the performance values
-    plt.plot(search_df.index, search_df["Performance"], marker="o", linestyle="-", label="Performance")
+    for file in os.listdir(results_folder):
+        if file.endswith(".csv"):
+            csv_file = os.path.join(results_folder, file)
+            output_image = os.path.join(results_folder, f"{dataset_name}_visualization.png")
+            search_df = pd.read_csv(csv_file)
 
-    # Highlight the best point
-    plt.plot(best_index, best_performance, marker="*", color="red", markersize=12, label="Best Point")
+            plt.plot(search_df.index, search_df["Performance"], linestyle="-")
 
-    # Add labels and title
+
     plt.xlabel("Search Iteration", fontsize=14)
     plt.ylabel("Performance", fontsize=14)
     plt.title(f"Search Results Visualization for {dataset_name}", fontsize=16)
     plt.legend()
 
-    # Save and show the plot
-    os.makedirs(visualization_folder, exist_ok=True)
+
     plt.savefig(output_image)
-    plt.show()
 
 
 def main():
     """
     Main function to generate visualizations for all datasets in the results folder.
     """
-    results_folder = "search_results"
+    sa_folder = "sa_results"
+    ga_folder = "ga_results"
+    rs_folder = "rs_results"
+
     visualization_folder = "visualization_results"
 
-    if not os.path.exists(results_folder):
-        print(f"Error: The folder {results_folder} does not exist.")
+    if not os.path.exists(sa_folder):
+        print(f"Error: The folder {sa_folder} does not exist.")
         return
-
-    for file_name in os.listdir(results_folder):
-        if file_name.endswith("_search_results.csv"):
-            dataset_name = file_name.replace("_search_results.csv", "")
-            visualize_search_results(results_folder, dataset_name, visualization_folder)
+    if not os.path.exists(ga_folder):
+        print(f"Error: The folder {ga_folder} does not exist.")
+        return
+    if not os.path.exists(rs_folder):
+        print(f"Error: The folder {rs_folder} does not exist.")
+        return
+    
+    for folder in [sa_folder, ga_folder, rs_folder]:
+        for dataset_folder in os.listdir(folder):
+            dataset_name = dataset_folder
+            dataset_folder = os.path.join(folder, dataset_folder)
+            visualize_search_results(dataset_folder, dataset_name)
 
 
 if __name__ == "__main__":

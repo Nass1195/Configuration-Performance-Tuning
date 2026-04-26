@@ -285,6 +285,9 @@ def compare_algorithms(file_path, output_file, sa_results_path, ga_results_path,
     stat, p_sa_ga = stats.mannwhitneyu(sa_results, ga_results, alternative='less')
     print(f"SA vs GA p-value: {p_sa_ga:.4e} -> {'SA is significantly better than GA' if p_sa_ga < 0.05 else 'GA is better or no difference'}")
 
+    stat, p_ga_sa = stats.mannwhitneyu(ga_results, sa_results, alternative='less')
+    print(f"GA vs SA p-value: {p_ga_sa:.4e} -> {'GA is significantly better than SA' if p_ga_sa < 0.05 else 'SA is better or no difference'}")
+
   
     plt.figure(figsize=(8, 6))
     results_data = [rs_results, sa_results, ga_results]
@@ -305,7 +308,8 @@ def compare_algorithms(file_path, output_file, sa_results_path, ga_results_path,
         'GA_Beats_RS (p < 0.05)': p_ga < 0.05,
         'SA vs RS p-value': p_sa,
         'GA vs RS p-value': p_ga,
-        'SA vs GA p-value': p_sa_ga
+        'SA vs GA p-value': p_sa_ga,
+        'GA vs SA p-value': p_ga_sa
     }
 
     return results, summary
@@ -335,7 +339,7 @@ def generate_global_report(summaries, output_folder):
     normalized_df = normalized_df.T 
 
     print(normalized_df)
-    sns.heatmap(normalized_df, fmt=".2f", cmap="YlGnBu_r", cbar_kws={'label': 'Normalized Performance (Lighter is Better)'})
+    sns.heatmap(normalized_df, cmap="YlGnBu", cbar_kws={'label': 'Normalized Performance (Lighter/Yellower is Better)'})
     plt.title("Algorithm Median Performance Across Datasets")
     plt.ylabel("Dataset")
     plt.xlabel("Algorithm")
@@ -368,9 +372,12 @@ def generate_global_report(summaries, output_folder):
     plt.savefig(bar_path)
     print(f"Saved global visualizations to '{output_folder}' directory.")
 
-
-    p_val_cols = ['SA vs RS p-value', 'GA vs RS p-value', 'SA vs GA p-value']
+    p_val_cols = ['SA vs RS p-value', 'GA vs RS p-value', 'SA vs GA p-value', 'GA vs SA p-value']
     p_val_df = df[p_val_cols]
+
+    sig_counts = (p_val_df < 0.05).sum()
+
+    new_labels = [f"{col}\n(sig: {sig_counts[col]}/{len(p_val_df)})" for col in p_val_cols]
 
     plt.figure(figsize=(8, len(df) * 0.6 + 2))
 
@@ -379,6 +386,7 @@ def generate_global_report(summaries, output_folder):
                 vmin=0.0, 
                 vmax=0.1,           
                 linewidths=0.5,
+                xticklabels=new_labels,
                 cbar_kws={'label': 'p-value (Green indicates p < 0.05)'})
     
     plt.title('Algorithm Comparison P-Values per Dataset')
