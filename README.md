@@ -53,7 +53,7 @@ Maintains a population of valid configurations. Uses tournament selection to cho
 
 ## Usage
 
-The program has two modes: a **tool mode** (default) for finding the best configuration of a single dataset, and a **test mode** (`-test`) for running the full algorithm comparison loop.
+The program has three modes: a **tool mode** (default) for finding the best configuration of a single dataset, a **test mode** (`-test`) for running the full algorithm comparison loop, and a **GUI mode** (`-gui`) for interactive search where the user measures each suggested configuration manually.
 
 ### 1. Tool Mode — Find Best Configuration
 Run the program with a dataset path to find the best configuration using the chosen algorithm:
@@ -85,13 +85,27 @@ python main.py -test
 ```
 Results for each run are saved as CSV files under `rs_results/`, `sa_results/`, and `ga_results/`. Per-dataset comparison plots and a global summary report are saved to `search_results/`.
 
-### 3. Visualize Search Results
+### 3. GUI Mode — Interactive Search
+Launch a graphical window where you define the configuration space yourself and evaluate each suggested configuration manually:
+```bash
+python main.py -gui
+```
+
+In the setup window you choose:
+- The algorithm (RS, SA, or GA)
+- The budget (number of evaluations)
+- The objective (minimize or maximize)
+- The configuration columns — one row per parameter, listing its possible values as a comma-separated list
+
+After clicking **Start**, the algorithm proposes one configuration at a time. Test it however you like (run a benchmark, time a build, measure a metric…) and type the resulting performance number into the entry field. Press Enter or click **Submit** to record it; the algorithm will use the value to decide the next configuration. When the budget is exhausted, the best configuration found is shown and the full trace can be saved to a CSV file.
+
+### 4. Visualize Search Results
 Run the visualization script to regenerate performance plots from existing result files:
 ```bash
 python visualize_serach_results.py
 ```
 
-### 4. Help
+### 5. Help
 ```bash
 python main.py -h
 ```
@@ -137,7 +151,8 @@ project-folder/
 ├── sa_results/             # Raw SA run results per dataset (test mode)
 ├── ga_results/             # Raw GA run results per dataset (test mode)
 ├── search_results/         # Per-dataset plots and global summary (test mode)
-├── main.py                 # CLI entry: tool mode (default) or test mode (-test)
+├── main.py                 # CLI entry: tool mode (default), test mode (-test), or GUI mode (-gui)
+├── gui_mode.py             # Tkinter GUI and interactive (generator-based) algorithm variants
 ├── visualize_serach_results.py  # Script for regenerating visualizations
 ├── requirements.txt        # Python dependencies
 └── README.md               # Project documentation

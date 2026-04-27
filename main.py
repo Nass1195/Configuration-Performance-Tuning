@@ -297,10 +297,15 @@ Examples:
 
   Run the full algorithm comparison test loop (30 runs per dataset):
     python main.py -test
+
+  Launch the interactive GUI (no dataset required — you measure each config manually):
+    python main.py -gui
 """,
     )
     parser.add_argument('-test', action='store_true',
                         help='Run the algorithm comparison test loop on all datasets')
+    parser.add_argument('-gui', action='store_true',
+                        help='Launch the interactive GUI mode')
     parser.add_argument('-dataset', type=str,
                         help='Path to a dataset CSV file')
     parser.add_argument('-algo', type=str, choices=['RS', 'SA', 'GA'], default='SA',
@@ -312,7 +317,10 @@ Examples:
 
     args = parser.parse_args()
 
-    if args.test:
+    if args.gui:
+        from gui_mode import launch_gui
+        launch_gui()
+    elif args.test:
         run_test_loop()
     elif args.dataset:
         find_best_config(args.dataset, args.algo, args.budget, maximize=(args.objective == 'max'))
