@@ -64,13 +64,19 @@ python main.py -dataset datasets/7z.csv
 Optional arguments:
 - `-algo {RS,SA,GA}` — algorithm to use (default: `SA`)
 - `-budget N` — number of evaluations (default: `100`)
+- `-objective {min,max}` — whether to minimize or maximize the performance column (default: `min`)
 
-Example with all options:
+Example minimizing runtime with GA and a larger budget:
 ```bash
 python main.py -dataset datasets/Apache.csv -algo GA -budget 200
 ```
 
-Tool-mode output prints the best configuration and its performance, and saves the search trace to `tool_results/<dataset>_<algo>_trace.csv`.
+Example maximizing a throughput-style objective:
+```bash
+python main.py -dataset datasets/throughput.csv -objective max
+```
+
+Tool-mode output prints the best configuration and its performance, and saves the search trace to `tool_results/<dataset>_<algo>_trace.csv`. All three algorithms natively support both `min` and `max` objectives.
 
 ### 2. Test Mode — Algorithm Comparison
 Run the full comparison loop (3 algorithms × 30 runs × all datasets, budget = 100):

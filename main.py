@@ -8,7 +8,7 @@ from scipy import stats
 import seaborn as sns
 
 # Define the random search function
-def random_search(file_path, budget, output_file):
+def random_search(file_path, budget, output_file, maximize=False):
     # Load the dataset
     data = pd.read_csv(file_path)
 
@@ -16,22 +16,14 @@ def random_search(file_path, budget, output_file):
     config_columns = data.columns[:-1]
     performance_column = data.columns[-1]
 
-    # Determine if this is a maximization or minimization problem
-    # maximize throughput and minimize runtime
-    system_name = os.path.basename(file_path).split('.')[0]
-    if system_name.lower() == "---":
-        maximization = True
+    # Penalty for missing configurations (worse than any valid value)
+    if maximize:
+        worst_value = data[performance_column].min() / 2
     else:
-        maximization = False
-
-    # Extract the best and worst performance values
-    if maximization:
-        worst_value = data[performance_column].min() / 2  # For missing configurations
-    else:
-        worst_value = data[performance_column].max() * 2  # For minssing configrations
+        worst_value = data[performance_column].max() * 2
 
     # Initialize the best solution and performance
-    best_performance = -np.inf if maximization else np.inf
+    best_performance = -np.inf if maximize else np.inf
     best_solution = []
 
     # Store all search results
@@ -56,7 +48,7 @@ def random_search(file_path, budget, output_file):
             performance = worst_value
 
         # Update the best solution
-        if maximization:
+        if maximize:
             if performance > best_performance:
                 best_performance = performance
                 best_solution = sampled_config
@@ -75,14 +67,18 @@ def random_search(file_path, budget, output_file):
 
     return [int(x) for x in best_solution], best_performance
 
-def genetic_algorithm(file_path, budget, output_file):
+def genetic_algorithm(file_path, budget, output_file, maximize=False):
     data = pd.read_csv(file_path)
 
     config_columns = list(data.columns[:-1])
     performance_column = data.columns[-1]
-    
+
     data_dict = data.set_index(config_columns)[performance_column].to_dict()
     unique_values = {col: data[col].unique() for col in config_columns}
+
+    is_better = (lambda new, ref: new > ref) if maximize else (lambda new, ref: new < ref)
+    best_fn = max if maximize else min
+    worst_fn = min if maximize else max
 
     search_results = []
 
@@ -98,7 +94,7 @@ def genetic_algorithm(file_path, budget, output_file):
             performances.append(data_dict[config])
             search_results.append(list(config) + [data_dict[config]])
 
-    best_performance = min(performances)
+    best_performance = best_fn(performances)
     best_idx = performances.index(best_performance)
     best_individual = list(pop[best_idx])
 
@@ -106,15 +102,15 @@ def genetic_algorithm(file_path, budget, output_file):
     while iteration < budget:
 
         t1, t2 = random.sample(range(pop_size), 2)
-        p1 = pop[t1] if performances[t1] < performances[t2] else pop[t2]
+        p1 = pop[t1] if is_better(performances[t1], performances[t2]) else pop[t2]
 
         t3, t4 = random.sample(range(pop_size), 2)
-        p2 = pop[t3] if performances[t3] < performances[t4] else pop[t4]
+        p2 = pop[t3] if is_better(performances[t3], performances[t4]) else pop[t4]
 
 
         child = [p1[i] if random.random() < 0.5 else p2[i] for i in range(len(config_columns))]
 
-        
+
         mut_idx = random.randint(0, len(config_columns) - 1)
         col_name = config_columns[mut_idx]
         child[mut_idx] = int(random.choice(unique_values[col_name]))
@@ -123,44 +119,46 @@ def genetic_algorithm(file_path, budget, output_file):
         perf = data_dict.get(child_tuple)
 
         if perf is not None:
-            worst_idx = performances.index(max(performances))
+            worst_idx = performances.index(worst_fn(performances))
             pop[worst_idx] = child
             performances[worst_idx] = perf
-            if perf < best_performance:
+            if is_better(perf, best_performance):
                 best_performance = perf
                 best_individual = list(child)
             iteration += 1
             search_results.append(child + [perf])
-        
+
     columns = config_columns + ["Performance"]
     pd.DataFrame(search_results, columns=columns).to_csv(output_file, index=False)
 
     return best_individual, best_performance
 
 
-def SA(file_path, budget, output_file):
+def SA(file_path, budget, output_file, maximize=False):
 
     data = pd.read_csv(file_path)
 
     config_columns = list(data.columns[:-1])
     performance_column = data.columns[-1]
-    
+
     data_dict = data.set_index(config_columns)[performance_column].to_dict()
     unique_values = {col: data[col].unique() for col in config_columns}
 
+    is_better = (lambda new, ref: new > ref) if maximize else (lambda new, ref: new < ref)
+
     search_results = []
-    
+
     while True:
         sampled_config = tuple(int(np.random.choice(unique_values[col])) for col in config_columns)
         if sampled_config in data_dict:
             best_performance = data_dict[sampled_config]
             best_solution = list(sampled_config)
             break
-    
+
     current_solution = best_solution
     current_performance = best_performance
 
-    temp = max(1.0, current_performance * 0.2)
+    temp = max(1.0, abs(current_performance) * 0.2)
     colling_rate = 0.98
     iteration = 1
 
@@ -176,17 +174,18 @@ def SA(file_path, budget, output_file):
             new_solution[idx] = int(random.choice(possible_values))
 
         new_solution_tuple = tuple(new_solution)
-       
+
         performance = data_dict.get(new_solution_tuple)
 
         if performance is not None:
-            performance_delta = performance - current_performance
-            
+            # Sign so that delta < 0 always means improvement, regardless of objective.
+            performance_delta = (current_performance - performance) if maximize else (performance - current_performance)
+
             if performance_delta < 0 or np.random.rand() < np.exp(-performance_delta / temp):
                 current_solution = new_solution
                 current_performance = performance
 
-                if current_performance < best_performance:
+                if is_better(current_performance, best_performance):
                     best_solution = list(current_solution)
                     best_performance = current_performance
 
@@ -239,7 +238,7 @@ def run_test_loop():
     generate_global_report(summaries, output_folder)
 
 
-def find_best_config(dataset_path, algo, budget):
+def find_best_config(dataset_path, algo, budget, maximize):
     if not os.path.isfile(dataset_path):
         print(f"Error: Dataset file '{dataset_path}' not found.")
         return
@@ -260,16 +259,19 @@ def find_best_config(dataset_path, algo, budget):
     os.makedirs(output_folder, exist_ok=True)
     output_file = os.path.join(output_folder, f"{dataset_name}_{algo}_trace.csv")
 
+    objective = "Maximization (higher is better)" if maximize else "Minimization (lower is better)"
+
     print(f"\n======================================")
     print(f"Configuration Tuning Tool")
     print(f"======================================")
     print(f"Dataset:   {dataset_path}")
     print(f"Algorithm: {algo_name}")
+    print(f"Objective: {objective}")
     print(f"Budget:    {budget} evaluations")
     print(f"--------------------------------------")
     print("Searching for best configuration...")
 
-    best_solution, best_performance = algo_fn(dataset_path, budget, output_file)
+    best_solution, best_performance = algo_fn(dataset_path, budget, output_file, maximize=maximize)
 
     print("\nBest Configuration Found:")
     for col, val in zip(config_columns, best_solution):
@@ -284,11 +286,14 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
-  Find best configuration (default algorithm: SA, budget: 100):
+  Find best configuration (default: SA, budget 100, minimization):
     python main.py -dataset datasets/7z.csv
 
-  Use a specific algorithm and budget:
+  Specify algorithm and budget:
     python main.py -dataset datasets/Apache.csv -algo GA -budget 200
+
+  Maximize the performance objective instead of minimizing it:
+    python main.py -dataset datasets/throughput.csv -objective max
 
   Run the full algorithm comparison test loop (30 runs per dataset):
     python main.py -test
@@ -302,13 +307,15 @@ Examples:
                         help='Algorithm to use: RS (Random Search), SA (Simulated Annealing), GA (Genetic Algorithm). Default: SA')
     parser.add_argument('-budget', type=int, default=100,
                         help='Number of evaluations to perform. Default: 100')
+    parser.add_argument('-objective', type=str, choices=['min', 'max'], default='min',
+                        help='Optimization objective: min (lower is better) or max (higher is better). Default: min')
 
     args = parser.parse_args()
 
     if args.test:
         run_test_loop()
     elif args.dataset:
-        find_best_config(args.dataset, args.algo, args.budget)
+        find_best_config(args.dataset, args.algo, args.budget, maximize=(args.objective == 'max'))
     else:
         parser.print_help()
 
