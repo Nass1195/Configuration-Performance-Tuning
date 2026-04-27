@@ -53,23 +53,41 @@ Maintains a population of valid configurations. Uses tournament selection to cho
 
 ## Usage
 
-### 1. Run Algorithm Comparison
-Run the main script to compare all three algorithms across all datasets (30 runs each, budget of 100 evaluations per run):
+The program has two modes: a **tool mode** (default) for finding the best configuration of a single dataset, and a **test mode** (`-test`) for running the full algorithm comparison loop.
+
+### 1. Tool Mode — Find Best Configuration
+Run the program with a dataset path to find the best configuration using the chosen algorithm:
 ```bash
-python main.py
+python main.py -dataset datasets/7z.csv
+```
+
+Optional arguments:
+- `-algo {RS,SA,GA}` — algorithm to use (default: `SA`)
+- `-budget N` — number of evaluations (default: `100`)
+
+Example with all options:
+```bash
+python main.py -dataset datasets/Apache.csv -algo GA -budget 200
+```
+
+Tool-mode output prints the best configuration and its performance, and saves the search trace to `tool_results/<dataset>_<algo>_trace.csv`.
+
+### 2. Test Mode — Algorithm Comparison
+Run the full comparison loop (3 algorithms × 30 runs × all datasets, budget = 100):
+```bash
+python main.py -test
 ```
 Results for each run are saved as CSV files under `rs_results/`, `sa_results/`, and `ga_results/`. Per-dataset comparison plots and a global summary report are saved to `search_results/`.
 
-### 2. Visualize Search Results
+### 3. Visualize Search Results
 Run the visualization script to regenerate performance plots from existing result files:
 ```bash
 python visualize_serach_results.py
 ```
 
-### 3. Customize the Search Budget or Number of Runs
-In `main.py`, modify the `budget` and `runs` parameters in the `compare_algorithms` call:
-```python
-compare_algorithms(file_path, output_file, ..., budget=100, runs=30)
+### 4. Help
+```bash
+python main.py -h
 ```
 
 ## Output Files
@@ -108,11 +126,12 @@ Comparisons performed per dataset:
 ```
 project-folder/
 ├── datasets/               # Input datasets (CSV files)
-├── rs_results/             # Raw RS run results per dataset
-├── sa_results/             # Raw SA run results per dataset
-├── ga_results/             # Raw GA run results per dataset
-├── search_results/         # Per-dataset plots and global summary
-├── main.py                 # Main script: runs all algorithms and generates reports
+├── tool_results/           # Search traces from tool mode (single-run)
+├── rs_results/             # Raw RS run results per dataset (test mode)
+├── sa_results/             # Raw SA run results per dataset (test mode)
+├── ga_results/             # Raw GA run results per dataset (test mode)
+├── search_results/         # Per-dataset plots and global summary (test mode)
+├── main.py                 # CLI entry: tool mode (default) or test mode (-test)
 ├── visualize_serach_results.py  # Script for regenerating visualizations
 ├── requirements.txt        # Python dependencies
 └── README.md               # Project documentation

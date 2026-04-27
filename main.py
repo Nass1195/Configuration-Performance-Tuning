@@ -1,3 +1,4 @@
+import argparse
 import pandas as pd
 import numpy as np
 import random
@@ -200,7 +201,7 @@ def SA(file_path, budget, output_file):
     return [int(x) for x in best_solution], best_performance
 
 
-def main():
+def run_test_loop():
     datasets_folder = "datasets"
     output_folder = "search_results"
     SA_results_folder = "sa_results"
@@ -216,7 +217,7 @@ def main():
 
 
     for file_name in os.listdir(datasets_folder):
-        
+
         if file_name.endswith(".csv"):
             dataset_name = file_name.split('.')[0]
             print(f"\n======================================")
@@ -234,8 +235,82 @@ def main():
             results[dataset_name] = algo_results
             summaries.append(summary)
 
-        
+
     generate_global_report(summaries, output_folder)
+
+
+def find_best_config(dataset_path, algo, budget):
+    if not os.path.isfile(dataset_path):
+        print(f"Error: Dataset file '{dataset_path}' not found.")
+        return
+
+    algo_map = {
+        'RS': (random_search, 'Random Search'),
+        'SA': (SA, 'Simulated Annealing'),
+        'GA': (genetic_algorithm, 'Genetic Algorithm'),
+    }
+    algo_fn, algo_name = algo_map[algo]
+
+    data = pd.read_csv(dataset_path)
+    config_columns = list(data.columns[:-1])
+    performance_column = data.columns[-1]
+    dataset_name = os.path.basename(dataset_path).split('.')[0]
+
+    output_folder = "tool_results"
+    os.makedirs(output_folder, exist_ok=True)
+    output_file = os.path.join(output_folder, f"{dataset_name}_{algo}_trace.csv")
+
+    print(f"\n======================================")
+    print(f"Configuration Tuning Tool")
+    print(f"======================================")
+    print(f"Dataset:   {dataset_path}")
+    print(f"Algorithm: {algo_name}")
+    print(f"Budget:    {budget} evaluations")
+    print(f"--------------------------------------")
+    print("Searching for best configuration...")
+
+    best_solution, best_performance = algo_fn(dataset_path, budget, output_file)
+
+    print("\nBest Configuration Found:")
+    for col, val in zip(config_columns, best_solution):
+        print(f"  {col}: {val}")
+    print(f"\nBest {performance_column}: {best_performance}")
+    print(f"Search trace saved to: {output_file}")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Configuration Performance Tuning Tool — find the best configuration for a configurable system using RS, SA, or GA.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  Find best configuration (default algorithm: SA, budget: 100):
+    python main.py -dataset datasets/7z.csv
+
+  Use a specific algorithm and budget:
+    python main.py -dataset datasets/Apache.csv -algo GA -budget 200
+
+  Run the full algorithm comparison test loop (30 runs per dataset):
+    python main.py -test
+""",
+    )
+    parser.add_argument('-test', action='store_true',
+                        help='Run the algorithm comparison test loop on all datasets')
+    parser.add_argument('-dataset', type=str,
+                        help='Path to a dataset CSV file')
+    parser.add_argument('-algo', type=str, choices=['RS', 'SA', 'GA'], default='SA',
+                        help='Algorithm to use: RS (Random Search), SA (Simulated Annealing), GA (Genetic Algorithm). Default: SA')
+    parser.add_argument('-budget', type=int, default=100,
+                        help='Number of evaluations to perform. Default: 100')
+
+    args = parser.parse_args()
+
+    if args.test:
+        run_test_loop()
+    elif args.dataset:
+        find_best_config(args.dataset, args.algo, args.budget)
+    else:
+        parser.print_help()
 
 
 def compare_algorithms(file_path, output_file, sa_results_path, ga_results_path, rs_results_path, budget=100, runs=30):
